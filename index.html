@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bus Pass Ticket Manager</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f6fb; margin: 0; padding: 0; color: #1f2937; }
+        .container { max-width: 900px; margin: 0 auto; padding: 24px; }
+        h1 { margin-top: 0; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 12px 30px rgba(31, 41, 55, 0.08); padding: 20px; margin-bottom: 20px; }
+        label { display: block; margin: 12px 0 6px; font-weight: 600; }
+        input, button, select { width: 100%; padding: 10px; margin-top: 4px; border: 1px solid #d1d5db; border-radius: 8px; }
+        button { cursor: pointer; background: #2563eb; color: white; border: none; font-weight: 600; transition: background 0.2s ease; }
+        button:hover { background: #1d4ed8; }
+        .row { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+        .message { margin-top: 10px; padding: 10px; border-radius: 8px; }
+        .success { background: #dcfce7; color: #166534; }
+        .error { background: #fee2e2; color: #991b1b; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+        th { background: #f8fafc; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bus Pass Ticket Manager</h1>
+        <div class="card">
+            <h2>Create a new pass</h2>
+            <div class="row">
+                <div>
+                    <label for="pass-id">Pass ID</label>
+                    <input id="pass-id" placeholder="P001" />
+                </div>
+                <div>
+                    <label for="pass-name">Passenger Name</label>
+                    <input id="pass-name" placeholder="John Doe" />
+                </div>
+                <div>
+                    <label for="pass-route">Route</label>
+                    <input id="pass-route" placeholder="A to B" />
+                </div>
+                <div>
+                    <label for="pass-validity">Validity</label>
+                    <input id="pass-validity" placeholder="30 days" />
+                </div>
+            </div>
+            <button id="create-button">Create Pass</button>
+            <div id="create-message" class="message" style="display:none"></div>
+        </div>
+
+        <div class="card">
+            <h2>Manage passes</h2>
+            <div class="row">
+                <div>
+                    <label for="search-id">Search by Pass ID</label>
+                    <input id="search-id" placeholder="P001" />
+                    <button id="search-button">Search Pass</button>
+                    <div id="search-message" class="message" style="display:none"></div>
+                </div>
+                <div>
+                    <label for="renew-id">Renew Pass ID</label>
+                    <input id="renew-id" placeholder="P001" />
+                    <label for="renew-validity">New Validity</label>
+                    <input id="renew-validity" placeholder="60 days" />
+                    <button id="renew-button">Renew Pass</button>
+                    <div id="renew-message" class="message" style="display:none"></div>
+                </div>
+                <div>
+                    <label for="delete-id">Delete Pass ID</label>
+                    <input id="delete-id" placeholder="P001" />
+                    <button id="delete-button">Delete Pass</button>
+                    <div id="delete-message" class="message" style="display:none"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Current Passes</h2>
+            <div id="passes-list">Loading passes...</div>
+        </div>
+    </div>
+
+    <script>
+        const showMessage = (element, text, success = true) => {
+            element.textContent = text;
+            element.className = success ? 'message success' : 'message error';
+            element.style.display = 'block';
+            setTimeout(() => { element.style.display = 'none'; }, 5000);
+        };
+
+        const refreshPasses = async () => {
+            const response = await fetch('/passes');
+            const passes = await response.json();
+            const list = document.getElementById('passes-list');
+
+            if (!passes.length) {
+                list.innerHTML = '<p>No bus passes found.</p>';
+                return;
+            }
+
+            let html = '<table><thead><tr><th>ID</th><th>Name</th><th>Route</th><th>Validity</th></tr></thead><tbody>';
+            passes.forEach(p => {
+                html += `<tr><td>${p.id}</td><td>${p.name}</td><td>${p.route}</td><td>${p.validity}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            list.innerHTML = html;
+        };
+
+        document.getElementById('create-button').addEventListener('click', async () => {
+            const payload = {
+                id: document.getElementById('pass-id').value.trim(),
+                name: document.getElementById('pass-name').value.trim(),
+                route: document.getElementById('pass-route').value.trim(),
+                validity: document.getElementById('pass-validity').value.trim(),
+            };
+            const message = document.getElementById('create-message');
+
+            const response = await fetch('/passes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                showMessage(message, result.error || 'Failed to create pass.', false);
+                return;
+            }
+
+            showMessage(message, '✅ Bus Pass Created Successfully!');
+            document.getElementById('pass-id').value = '';
+            document.getElementById('pass-name').value = '';
+            document.getElementById('pass-route').value = '';
+            document.getElementById('pass-validity').value = '';
+            refreshPasses();
+        });
+
+        document.getElementById('search-button').addEventListener('click', async () => {
+            const passId = document.getElementById('search-id').value.trim();
+            const message = document.getElementById('search-message');
+            if (!passId) {
+                showMessage(message, 'Please enter a Pass ID.', false);
+                return;
+            }
+
+            const response = await fetch(`/passes/${encodeURIComponent(passId)}`);
+            const result = await response.json();
+            if (!response.ok) {
+                showMessage(message, result.error || 'Pass not found.', false);
+                return;
+            }
+
+            showMessage(message, `Found: ${result.name} on route ${result.route} (${result.validity})`);
+        });
+
+        document.getElementById('renew-button').addEventListener('click', async () => {
+            const passId = document.getElementById('renew-id').value.trim();
+            const validity = document.getElementById('renew-validity').value.trim();
+            const message = document.getElementById('renew-message');
+            if (!passId || !validity) {
+                showMessage(message, 'Pass ID and new validity are required.', false);
+                return;
+            }
+
+            const response = await fetch(`/passes/${encodeURIComponent(passId)}/renew`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ validity }),
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                showMessage(message, result.error || 'Renew failed.', false);
+                return;
+            }
+
+            showMessage(message, `✅ Renewed ${result.id} to ${result.validity}`);
+            refreshPasses();
+        });
+
+        document.getElementById('delete-button').addEventListener('click', async () => {
+            const passId = document.getElementById('delete-id').value.trim();
+            const message = document.getElementById('delete-message');
+            if (!passId) {
+                showMessage(message, 'Please enter a Pass ID.', false);
+                return;
+            }
+
+            const response = await fetch(`/passes/${encodeURIComponent(passId)}`, {
+                method: 'DELETE',
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                showMessage(message, result.error || 'Delete failed.', false);
+                return;
+            }
+
+            showMessage(message, result.message || 'Pass deleted successfully.');
+            refreshPasses();
+        });
+
+        refreshPasses();
+    </script>
+</body>
+</html>
